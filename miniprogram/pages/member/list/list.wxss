@@ -1,0 +1,126 @@
+.page {
+  min-height: 100vh;
+  background: #f5f5f5;
+  padding-bottom: 40rpx;
+}
+
+/* 搜索栏 */
+.search-bar {
+  display: flex;
+  align-items: center;
+  padding: 20rpx 24rpx;
+  background: #fff;
+  border-bottom: 1rpx solid #eee;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.search-input {
+  flex: 1;
+  height: 68rpx;
+  background: #f5f5f5;
+  border-radius: 8rpx;
+  padding: 0 20rpx;
+  font-size: 28rpx;
+}
+
+.search-btn {
+  width: 100rpx;
+  height: 68rpx;
+  line-height: 68rpx;
+  text-align: center;
+  font-size: 28rpx;
+  color: #fff;
+  background: #1677ff;
+  border-radius: 8rpx;
+  margin-left: 16rpx;
+}
+
+/* 卡片 */
+.member-card {
+  margin: 16rpx 24rpx;
+  padding: 24rpx;
+  background: #fff;
+  border-radius: 12rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+}
+
+.card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  line-height: 1.5;
+}
+
+.card-row + .card-row {
+  margin-top: 12rpx;
+}
+
+.name {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.phone {
+  font-size: 28rpx;
+  color: #666;
+}
+
+.secondary {
+  font-size: 26rpx;
+}
+
+.label {
+  color: #999;
+}
+
+.points-value {
+  color: #fa8c16;
+  font-weight: 600;
+  font-size: 28rpx;
+}
+
+.model-value {
+  color: #333;
+  font-size: 26rpx;
+  max-width: 400rpx;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.address-value {
+  color: #333;
+  font-size: 26rpx;
+  max-width: 420rpx;
+  text-align: right;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 空状态 */
+.empty {
+  padding: 120rpx 0;
+  text-align: center;
+}
+
+.empty-text {
+  font-size: 28rpx;
+  color: #999;
+}
+
+/* 加载更多 */
+.load-more {
+  padding: 32rpx 0;
+  text-align: center;
+  font-size: 26rpx;
+  color: #999;
+}
+
+.load-more-btn {
+  color: #1677ff;
+}

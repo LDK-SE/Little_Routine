@@ -1,0 +1,53 @@
+<view class="page">
+  <!-- 搜索栏 -->
+  <view class="search-bar">
+    <input
+      class="search-input"
+      placeholder="搜索手机号或姓名"
+      value="{{keyword}}"
+      bindinput="onSearchInput"
+      bindconfirm="onSearch"
+      confirm-type="search"
+    />
+    <text class="search-btn" bindtap="onSearch">搜索</text>
+  </view>
+
+  <!-- 列表 -->
+  <view class="list-container">
+    <block wx:for="{{members}}" wx:key="id">
+      <view class="member-card" bindtap="onTapItem" data-id="{{item.id}}">
+        <view class="card-row">
+          <text class="name">{{item.name || '未填写'}}</text>
+          <text class="phone">{{item.phone}}</text>
+        </view>
+
+        <view class="card-row secondary">
+          <text class="label">积分</text>
+          <text class="points-value">{{item.totalPoints || 0}}</text>
+        </view>
+
+        <view class="card-row secondary" wx:if="{{item.lastPurchaseModel}}">
+          <text class="label">最近购买</text>
+          <text class="model-value">{{item.lastPurchaseModel}}</text>
+        </view>
+
+        <view class="card-row secondary" wx:if="{{item.address}}">
+          <text class="label">地址</text>
+          <text class="address-value">{{item.address}}</text>
+        </view>
+      </view>
+    </block>
+
+    <!-- 空状态 -->
+    <view class="empty" wx:if="{{!loading && members.length === 0}}">
+      <text class="empty-text">暂无会员数据</text>
+    </view>
+
+    <!-- 加载提示 -->
+    <view class="load-more" wx:if="{{members.length > 0}}">
+      <text wx:if="{{loading}}">加载中...</text>
+      <text wx:elif="{{!hasMore}}">-- 没有更多了 --</text>
+      <text wx:else bindtap="loadMore" class="load-more-btn">点击加载更多</text>
+    </view>
+  </view>
+</view>
