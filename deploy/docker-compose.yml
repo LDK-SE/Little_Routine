@@ -1,0 +1,88 @@
+# ============================================================================
+# 3C数码零售系统 · Docker Compose
+# ============================================================================
+# 启动: docker compose up -d
+# 停止: docker compose down
+# ============================================================================
+
+version: "3.9"
+
+services:
+  # ---- MySQL 8 ----
+  mysql:
+    image: mysql:8.0.36
+    container_name: 3c-retail-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root123}
+      MYSQL_DATABASE: 3c_retail
+      MYSQL_CHARSET: utf8mb4
+      MYSQL_COLLATION: utf8mb4_unicode_ci
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ../database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # ---- Redis ----
+  redis:
+    image: redis:7-alpine
+    container_name: 3c-retail-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # ---- NestJS API ----
+  api:
+    build:
+      context: ../backend
+      dockerfile: ../deploy/Dockerfile
+    container_name: 3c-retail-api
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      APP_NAME: 3c-retail-api
+      APP_PORT: 3000
+      APP_ENV: production
+      DATABASE_URL: mysql://root:${DB_ROOT_PASSWORD:-root123}@mysql:3306/3c_retail?charset=utf8mb4
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      REDIS_DB: 0
+      JWT_SECRET: ${JWT_SECRET:-prod-secret-change-me}
+      JWT_EXPIRES_IN: 7d
+      JWT_REFRESH_EXPIRES_IN: 30d
+      LOG_LEVEL: info
+      SWAGGER_ENABLED: "true"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - app-network
+
+volumes:
+  mysql_data:
+  redis_data:
+
+networks:
+  app-network:
+    driver: bridge

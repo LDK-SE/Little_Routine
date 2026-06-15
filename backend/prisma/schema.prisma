@@ -1,0 +1,1163 @@
+// ============================================================================
+// 3C数码零售系统 · Prisma Schema
+// ============================================================================
+// 版本:     V1.0 (基于 PROJECT_CONTEXT.md §5 + schema.sql)
+// 日期:     2026-06-14
+// 数据库:   MySQL 8.0.36+
+// 引擎:     InnoDB
+// 字符集:   utf8mb4 / utf8mb4_unicode_ci
+//
+// 统计:
+//   模型:       32 个
+//   枚举:       18 个
+//   分区表:     5 个 (sale_order / sale_item / point_ledger / system_log / ai_chat_log)
+//               注: Prisma 不原生支持 MySQL 分区, 需在 migration 中手动添加 PARTITION BY RANGE SQL
+//   软删除:     7 个 (shop / sys_user / product / product_sku / member / sale_order / return_order)
+//   乐观锁:     2 处 (imei_stock.version / member.total_points_version)
+//   外键关系:   38 条
+//   唯一约束:   18 条
+//
+// 重要说明:
+//   1. MySQL ENUM — Prisma MySQL provider 不支持 @db.Enum, 实际迁移时会生成为 VARCHAR。
+//      如需原生 MySQL ENUM, 请使用 `prisma migrate dev --create-only` 后手动修改 migration.sql。
+//   2. 分区表 — 5 张表需按 created_at 做 RANGE 分区(每半年)。Prisma 不支持分区,
+//      migration 生成后必须手动添加 PARTITION BY RANGE 语句。
+//   3. 复合主键 — 分区表使用 @@id([id, createdAt]) 以符合 MySQL 8 分区键必须在所有唯一键中的要求。
+//   4. DECIMAL 精度 — 所有金额字段使用 Decimal @db.Decimal(10,2),
+//      置信度使用 Decimal @db.Decimal(5,2)。
+//   5. 乐观锁 — imei_stock.version 和 member.totalPointsVersion 在应用层通过
+//      `WHERE version = ?` 实现, Prisma 仅定义字段, 不处理并发逻辑。
+//   6. 软删除 — 7 张表使用 deletedAt DateTime?, 查询时需在应用层添加 `where: { deletedAt: null }`。
+//   7. INSERT ONLY — 4 张表(sale_order 财务字段 / sale_item / point_ledger / stock_ledger)
+//      应用层禁止暴露 UPDATE/DELETE 方法, Prisma 仍可定义但需在 Service 层限制。
+// ============================================================================
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch", "relationJoins"]
+}
+
+datasource db {
+  provider     = "mysql"
+  url          = env("DATABASE_URL")
+  relationMode = "foreignKeys"
+}
+
+// ============================================================================
+// 枚举定义 (18 个)
+// ============================================================================
+
+/// 门店状态
+enum ShopStatus {
+  open   @map("1")
+  closed @map("0")
+}
+
+/// 用户状态
+enum UserStatus {
+  active  @map("1")
+  inactive @map("0")
+}
+
+/// 产品状态
+enum ProductStatus {
+  on_sale     @map("1")
+  discontinued @map("0")
+}
+
+/// IMEI 库存状态
+enum ImeiStatus {
+  pending_audit
+  in_stock
+  sold
+  returned
+  frozen
+}
+
+/// IMEI 审核状态
+enum AuditStatus {
+  pending
+  approved
+  rejected
+}
+
+/// 库存变动类型
+enum StockChangeType {
+  inbound
+  outbound
+  return
+  check_adjust
+}
+
+/// 采购单状态
+enum PurchaseStatus {
+  pending
+  approved
+  received
+  cancelled
+}
+
+/// 积分流水变动类型
+enum PointChangeType {
+  earn
+  redeem
+  expire
+  referral
+  manual_adjust
+}
+
+/// 支付方式
+enum PaymentMethod {
+  cash
+  wechat
+  alipay
+  bank_transfer
+  trade_in
+  subsidy
+  refund
+}
+
+/// 支付类型
+enum PaymentType {
+  normal
+  refund
+}
+
+/// 对账状态
+enum ReconcileStatus {
+  pending
+  matched
+  mismatched
+}
+
+/// 退货状态(销售单)
+enum ReturnStatus {
+  normal
+  return_requested
+  returning
+  returned
+}
+
+/// 退货类型
+enum ReturnType {
+  full_return
+  exchange
+  refund_only
+}
+
+/// 退货审核状态
+enum ReturnAuditStatus {
+  pending
+  approved
+  rejected
+}
+
+/// 提成类型
+enum CommissionType {
+  fixed
+  percentage
+  tiered
+}
+
+/// 提成结算状态
+enum CommissionSettleStatus {
+  pending
+  confirmed
+  paid
+}
+
+/// 国补状态
+enum SubsidyStatus {
+  pending_submit
+  submitted
+  under_review
+  approved
+  rejected
+  disbursed
+  recalled
+}
+
+/// 通知发件箱消息状态
+enum OutboxStatus {
+  pending
+  processing
+  published
+  failed
+}
+
+/// 对账检查类型
+enum ReconcileCheckType {
+  stock_vs_order
+  points_vs_ledger
+  payment_vs_order
+  subsidy_vs_sales
+}
+
+/// 对账结果
+enum ReconcileResult {
+  pass
+  fail
+}
+
+/// 积分过期执行状态
+enum ExpireStatus {
+  success
+  partial
+  failed
+}
+
+/// 预警类型
+enum AlertType {
+  low_stock
+  slow_moving
+  price_anomaly
+  negative_profit
+}
+
+/// 预警级别
+enum AlertLevel {
+  urgent
+  warning
+  info
+}
+
+/// 盘点类型
+enum StockCheckType {
+  full
+  partial
+  category
+}
+
+/// 盘点状态
+enum StockCheckStatus {
+  in_progress
+  committed
+  confirmed
+  cancelled
+}
+
+/// 盘点实盘结果
+enum CheckItemStatus {
+  found
+  missing
+  extra
+  wrong_location
+  damaged
+}
+
+/// 短信状态
+enum SmsStatus {
+  pending  @map("0")
+  sent     @map("1")
+  failed   @map("2")
+}
+
+// ============================================================================
+// 第一节：基础架构 (4 models)
+// ============================================================================
+
+/// 门店/连锁管理 (软删除)
+model Shop {
+  id            BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  shopNo        String     @unique @map("shop_no") @db.VarChar(20)
+  name          String     @db.VarChar(100)
+  address       String?    @db.VarChar(200)
+  contactPhone  String?    @map("contact_phone") @db.VarChar(11)
+  status        ShopStatus @default(open)
+  createdAt     DateTime   @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt     DateTime   @updatedAt @map("updated_at") @db.DateTime(0)
+  deletedAt     DateTime?  @map("deleted_at") @db.DateTime(0)
+
+  // 关联
+  users              SysUser[]
+  imeiStocks         ImeiStock[]
+  stockLedgers       StockLedger[]
+  purchaseOrders     PurchaseOrder[]
+  saleOrders         SaleOrder[]
+  paymentFlows       PaymentFlow[]
+  returnOrders       ReturnOrder[]
+  tradeInOrders      TradeInOrder[]
+  commissionLedgers  CommissionLedger[]
+  nationalSubsidies  NationalSubsidy[]
+  systemLogs         SystemLog[]
+  dailyReconciles    DailyReconcile[]
+  alertRules         AlertRule[]
+  alertLogs          AlertLog[]
+  stockChecks        StockCheck[]
+
+  @@map("shop")
+}
+
+/// 角色定义 (RBAC)
+model SysRole {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  code        String    @unique @db.VarChar(30)
+  name        String    @db.VarChar(50)
+  description String?   @db.VarChar(200)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.DateTime(0)
+
+  userRoles SysUserRole[]
+
+  @@map("sys_role")
+}
+
+/// 系统用户/员工 (软删除)
+model SysUser {
+  id           BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  shopId       BigInt     @map("shop_id") @db.UnsignedBigInt
+  phone        String     @unique @db.VarChar(11)
+  name         String     @db.VarChar(50)
+  passwordHash String     @map("password_hash") @db.VarChar(255)
+  status       UserStatus @default(active)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.DateTime(0)
+  deletedAt    DateTime?  @map("deleted_at") @db.DateTime(0)
+
+  // FK
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // 关联
+  userRoles              SysUserRole[]
+  stockLedgers           StockLedger[]         @relation("StockLedgerOperator")
+  approvedPurchaseOrders PurchaseOrder[]       @relation("PurchaseOrderApprover")
+  saleOrders             SaleOrder[]           @relation("SaleOrderSalesperson")
+  returnOrders           ReturnOrder[]         @relation("ReturnOrderAuditor")
+  commissionLedgers      CommissionLedger[]    @relation("CommissionLedgerSalesperson")
+  confirmedCommissions   CommissionLedger[]    @relation("CommissionLedgerConfirmer")
+  auditLogs              AuditLog[]
+  systemLogs             SystemLog[]
+  dailyResolves          DailyReconcile[]      @relation("DailyReconcileResolver")
+  stockChecks            StockCheck[]          @relation("StockCheckOperator")
+  confirmedStockChecks   StockCheck[]          @relation("StockCheckConfirmer")
+
+  @@map("sys_user")
+}
+
+/// 用户-角色关联 (RBAC 多对多)
+model SysUserRole {
+  id        BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  userId    BigInt   @map("user_id") @db.UnsignedBigInt
+  roleId    BigInt   @map("role_id") @db.UnsignedBigInt
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.DateTime(0)
+
+  user SysUser @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  role SysRole @relation(fields: [roleId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([userId, roleId], map: "uk_user_role")
+  @@map("sys_user_role")
+}
+
+// ============================================================================
+// 第二节：商品与库存 (6 models)
+// ============================================================================
+
+/// 产品 SPU (软删除)
+model Product {
+  id        BigInt        @id @default(autoincrement()) @db.UnsignedBigInt
+  brand     String        @db.VarChar(50)
+  model     String        @db.VarChar(100)
+  category  String?       @db.VarChar(30)
+  status    ProductStatus @default(on_sale)
+  createdAt DateTime      @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt DateTime      @updatedAt @map("updated_at") @db.DateTime(0)
+  deletedAt DateTime?     @map("deleted_at") @db.DateTime(0)
+
+  // 关联
+  skus ProductSku[]
+
+  @@unique([brand, model], map: "uk_brand_model")
+  @@index([category], map: "idx_category")
+  @@index([status], map: "idx_status")
+  @@index([deletedAt], map: "idx_deleted_at")
+  @@index([brand, model, status], map: "idx_brand_model_status")
+  @@map("product")
+}
+
+/// 产品规格 SKU (软删除, 连锁共用)
+model ProductSku {
+  id           BigInt        @id @default(autoincrement()) @db.UnsignedBigInt
+  productId    BigInt        @map("product_id") @db.UnsignedBigInt
+  color        String        @db.VarChar(30)
+  spec         String        @db.VarChar(50)
+  barcode      String?       @db.VarChar(50)
+  retailPrice  Decimal?      @map("retail_price") @db.Decimal(10, 2)
+  minSalePrice Decimal?      @map("min_sale_price") @db.Decimal(10, 2)
+  status       ProductStatus @default(on_sale)
+  createdAt    DateTime      @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt    DateTime      @updatedAt @map("updated_at") @db.DateTime(0)
+  deletedAt    DateTime?     @map("deleted_at") @db.DateTime(0)
+
+  // FK
+  product Product @relation(fields: [productId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // 关联
+  imeiStocks    ImeiStock[]
+  purchaseItems PurchaseItem[]
+  saleItems     SaleItem[]
+  alertRules    AlertRule[]
+
+  @@unique([productId, color, spec], map: "uk_product_color_spec")
+  @@index([barcode], map: "idx_barcode")
+  @@index([status], map: "idx_status")
+  @@index([deletedAt], map: "idx_deleted_at")
+  @@map("product_sku")
+}
+
+/// IMEI 库存主表 (乐观锁: version)
+model ImeiStock {
+  id          BigInt      @id @default(autoincrement()) @db.UnsignedBigInt
+  shopId      BigInt      @map("shop_id") @db.UnsignedBigInt
+  skuId       BigInt      @map("sku_id") @db.UnsignedBigInt
+  imei        String      @unique @db.VarChar(20)
+  batchNo     String?     @map("batch_no") @db.VarChar(50)
+  location    String?     @db.VarChar(50)
+  costPrice   Decimal?    @map("cost_price") @db.Decimal(10, 2)
+  channel     String?     @db.VarChar(50)
+  status      ImeiStatus  @default(pending_audit)
+  auditStatus AuditStatus @default(pending) @map("audit_status")
+  version     Int         @default(0) @db.UnsignedInt
+  createdAt   DateTime    @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt   DateTime    @updatedAt @map("updated_at") @db.DateTime(0)
+
+  // FK
+  shop Shop       @relation(fields: [shopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  sku  ProductSku @relation(fields: [skuId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // 关联 (按 imei 字段引用)
+  stockLedgers    StockLedger[]
+  saleItems       SaleItem[]
+  returnOrders    ReturnOrder[]
+  nationalSubsidies NationalSubsidy[]
+  auditLogs       AuditLog[]
+
+  @@index([shopId], map: "idx_shop_id")
+  @@index([skuId], map: "idx_sku_id")
+  @@index([status], map: "idx_status")
+  @@index([auditStatus], map: "idx_audit_status")
+  @@index([location], map: "idx_location")
+  @@index([batchNo], map: "idx_batch_no")
+  @@index([shopId, status], map: "idx_shop_status")
+  @@index([skuId, status], map: "idx_sku_status")
+  @@index([status, location], map: "idx_status_location")
+  @@map("imei_stock")
+}
+
+/// 库存变动流水 (INSERT ONLY)
+model StockLedger {
+  id          BigInt          @id @default(autoincrement()) @db.UnsignedBigInt
+  shopId      BigInt          @map("shop_id") @db.UnsignedBigInt
+  imei        String          @db.VarChar(20)
+  changeType  StockChangeType @map("change_type")
+  fromStatus  String?         @map("from_status") @db.VarChar(20)
+  toStatus    String          @map("to_status") @db.VarChar(20)
+  operatorId  BigInt          @map("operator_id") @db.UnsignedBigInt
+  orderNo     String?         @map("order_no") @db.VarChar(30)
+  remark      String?         @db.VarChar(200)
+  createdAt   DateTime        @default(now()) @map("created_at") @db.DateTime(0)
+
+  // FK
+  shop     Shop    @relation(fields: [shopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  imeiRef  ImeiStock @relation(fields: [imei], references: [imei], onDelete: Restrict, onUpdate: Cascade)
+  operator SysUser @relation("StockLedgerOperator", fields: [operatorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([imei], map: "idx_imei")
+  @@index([shopId], map: "idx_shop_id")
+  @@index([changeType], map: "idx_change_type")
+  @@index([operatorId], map: "idx_operator_id")
+  @@index([orderNo], map: "idx_order_no")
+  @@index([createdAt], map: "idx_created_at")
+  @@index([imei, createdAt], map: "idx_imei_created")
+  @@index([shopId, changeType, createdAt], map: "idx_shop_type_created")
+  @@map("stock_ledger")
+}
+
+/// 采购订单 (软删除)
+model PurchaseOrder {
+  id              BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
+  shopId          BigInt         @map("shop_id") @db.UnsignedBigInt
+  orderNo         String         @unique @map("order_no") @db.VarChar(30)
+  supplierName    String?        @map("supplier_name") @db.VarChar(100)
+  supplierContact String?        @map("supplier_contact") @db.VarChar(50)
+  totalAmount     Decimal        @default(0.00) @map("total_amount") @db.Decimal(10, 2)
+  status          PurchaseStatus @default(pending)
+  approvedBy      BigInt?        @map("approved_by") @db.UnsignedBigInt
+  approvedAt      DateTime?      @map("approved_at") @db.DateTime(0)
+  receivedAt      DateTime?      @map("received_at") @db.DateTime(0)
+  remark          String?        @db.VarChar(200)
+  createdAt       DateTime       @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.DateTime(0)
+  deletedAt       DateTime?      @map("deleted_at") @db.DateTime(0)
+
+  // FK
+  shop     Shop     @relation(fields: [shopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  approver SysUser? @relation("PurchaseOrderApprover", fields: [approvedBy], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  // 关联
+  items PurchaseItem[]
+
+  @@index([shopId], map: "idx_shop_id")
+  @@index([status], map: "idx_status")
+  @@index([createdAt], map: "idx_created_at")
+  @@index([deletedAt], map: "idx_deleted_at")
+  @@index([shopId, status], map: "idx_shop_status")
+  @@map("purchase_order")
+}
+
+/// 采购明细
+model PurchaseItem {
+  id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  purchaseOrderId BigInt   @map("purchase_order_id") @db.UnsignedBigInt
+  skuId           BigInt   @map("sku_id") @db.UnsignedBigInt
+  imei            String   @db.VarChar(20)
+  quantity        Int      @default(1)
+  unitCost        Decimal  @map("unit_cost") @db.Decimal(10, 2)
+  subtotal        Decimal  @db.Decimal(10, 2)
+  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime(0)
+
+  // FK
+  purchaseOrder PurchaseOrder @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  sku           ProductSku    @relation(fields: [skuId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([purchaseOrderId], map: "idx_po_id")
+  @@index([skuId], map: "idx_sku_id")
+  @@index([imei], map: "idx_imei")
+  @@index([purchaseOrderId, skuId], map: "idx_po_sku")
+  @@map("purchase_item")
+}
+
+// ============================================================================
+// 第三节：会员与积分 (3 models)
+// ============================================================================
+
+/// 会员表 (软删除, 乐观锁: totalPointsVersion, 连锁通用)
+model Member {
+  id                 BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  phone              String     @unique @db.VarChar(11)
+  name               String?    @db.VarChar(50)
+  address            String?    @db.VarChar(200)
+  licensePlate       String?    @map("license_plate") @db.VarChar(20)
+  backupPhone        String?    @map("backup_phone") @db.VarChar(11)
+  lastPurchaseModel  String?    @map("last_purchase_model") @db.VarChar(100)
+  totalPoints        Int        @default(0) @map("total_points")
+  totalPointsVersion Int        @default(0) @map("total_points_version") @db.UnsignedInt
+  referrerId         BigInt?    @map("referrer_id") @db.UnsignedBigInt
+  status             UserStatus @default(active)
+  createdAt          DateTime   @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt          DateTime   @updatedAt @map("updated_at") @db.DateTime(0)
+  deletedAt          DateTime?  @map("deleted_at") @db.DateTime(0)
+
+  // 自引用 FK (推荐人, 仅一级)
+  referrer Member?  @relation("MemberReferrer", fields: [referrerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  referrals Member[] @relation("MemberReferrer")
+
+  // 关联
+  pointLedgers       PointLedger[]
+  referralAsReferrer MemberReferral[] @relation("ReferralReferrer")
+  referralAsReferee  MemberReferral[] @relation("ReferralReferee")
+  saleOrders         SaleOrder[]
+  smsLogs            SmsLog[]
+  pointsExpireLogs   PointsExpireLog[]
+
+  @@index([referrerId], map: "idx_referrer_id")
+  @@index([status], map: "idx_status")
+  @@index([createdAt], map: "idx_created_at")
+  @@index([deletedAt], map: "idx_deleted_at")
+  @@map("member")
+}
+
+/// 推荐关系表 (仅一级推荐)
+model MemberReferral {
+  id              BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  referrerId      BigInt    @map("referrer_id") @db.UnsignedBigInt
+  refereeId       BigInt    @map("referee_id") @db.UnsignedBigInt
+  rewardGranted   Boolean   @default(false) @map("reward_granted") @db.TinyInt
+  rewardGrantedAt DateTime? @map("reward_granted_at") @db.DateTime(0)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.DateTime(0)
+
+  // FK
+  referrer Member @relation("ReferralReferrer", fields: [referrerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  referee  Member @relation("ReferralReferee", fields: [refereeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([referrerId, refereeId], map: "uk_referrer_referee")
+  @@index([refereeId], map: "idx_referee_id")
+  @@map("member_referral")
+}
+
+/// 积分流水 (INSERT ONLY, FIFO过期, 分区表)
+/// ⚠️ 分区表: 需在 migration 中手动添加 PARTITION BY RANGE (TO_DAYS(created_at))
+model PointLedger {
+  id               BigInt          @default(autoincrement()) @db.UnsignedBigInt
+  memberId         BigInt          @map("member_id") @db.UnsignedBigInt
+  changeType       PointChangeType @map("change_type")
+  amount           Int
+  balanceAfter     Int             @map("balance_after")
+  orderNo          String?         @map("order_no") @db.VarChar(30)
+  orderTime        DateTime?       @map("order_time") @db.DateTime(0)
+  productModel     String?         @map("product_model") @db.VarChar(100)
+  unitPrice        Decimal?        @map("unit_price") @db.Decimal(10, 2)
+  quantity         Int             @default(1)
+  expiresAt        DateTime?       @map("expires_at") @db.Date
+  expiredAmount    Int             @default(0) @map("expired_amount")
+  remainingAmount  Int             @map("remaining_amount")
+  remark           String?         @db.VarChar(200)
+  createdAt        DateTime        @default(now()) @map("created_at") @db.DateTime(0)
+
+  // FK
+  member Member @relation(fields: [memberId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // 复合主键 (MySQL 8 分区要求)
+  @@id([id, createdAt])
+  @@index([memberId], map: "idx_member_id")
+  @@index([orderNo], map: "idx_order_no")
+  @@index([changeType], map: "idx_change_type")
+  @@index([expiresAt], map: "idx_expires_at")
+  @@index([memberId, changeType, createdAt], map: "idx_member_type_created")
+  @@index([memberId, expiresAt, remainingAmount], map: "idx_member_expires_remaining")
+  @@map("point_ledger")
+}
+
+// ============================================================================
+// 第四节：销售与财务 (5 models)
+// ============================================================================
+
+/// 销售订单 (财务字段 INSERT ONLY, 软删除, 分区表)
+/// ⚠️ 分区表: 需在 migration 中手动添加 PARTITION BY RANGE (TO_DAYS(created_at))
+/// ⚠️ order_no 在业务上是全局唯一的(雪花ID),
+///    MySQL DDL 出于分区要求使用复合 UK (order_no, created_at),
+///    Prisma 中标记为 @unique 以支持 FK 引用
+model SaleOrder {
+  id                BigInt        @id @default(autoincrement()) @db.UnsignedBigInt
+  shopId            BigInt        @map("shop_id") @db.UnsignedBigInt
+  orderNo           String        @unique @map("order_no") @db.VarChar(30)
+  memberId          BigInt?       @map("member_id") @db.UnsignedBigInt
+  salespersonId     BigInt        @map("salesperson_id") @db.UnsignedBigInt
+  totalAmount       Decimal       @map("total_amount") @db.Decimal(10, 2)
+  totalCostSnapshot Decimal       @map("total_cost_snapshot") @db.Decimal(10, 2)
+  totalSubsidy      Decimal       @default(0.00) @map("total_subsidy") @db.Decimal(10, 2)
+  totalCommission   Decimal       @default(0.00) @map("total_commission") @db.Decimal(10, 2)
+  grossProfit       Decimal       @map("gross_profit") @db.Decimal(10, 2)
+  actualPaid        Decimal       @map("actual_paid") @db.Decimal(10, 2)
+  pointsUsedTotal   Int           @default(0) @map("points_used_total")
+  paymentMethod     PaymentMethod @map("payment_method")
+  returnStatus      ReturnStatus  @default(normal) @map("return_status")
+  createdAt         DateTime      @default(now()) @map("created_at") @db.DateTime(0)
+  deletedAt         DateTime?     @map("deleted_at") @db.DateTime(0)
+
+  // FK
+  shop        Shop     @relation(fields: [shopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  member      Member?  @relation(fields: [memberId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  salesperson SysUser  @relation("SaleOrderSalesperson", fields: [salespersonId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // 关联 (按 order_no 引用 — 业务上全局唯一)
+  saleItems         SaleItem[]
+  paymentFlows      PaymentFlow[]
+  returnOrders      ReturnOrder[]      @relation("ReturnOriginalOrder")
+  tradeInOrders     TradeInOrder[]
+  commissionLedgers CommissionLedger[]
+  nationalSubsidies NationalSubsidy[]
+
+  @@unique([orderNo, createdAt], map: "uk_order_no_created")
+  @@index([shopId], map: "idx_shop_id")
+  @@index([memberId], map: "idx_member_id")
+  @@index([salespersonId], map: "idx_salesperson_id")
+  @@index([paymentMethod], map: "idx_payment_method")
+  @@index([returnStatus], map: "idx_return_status")
+  @@index([deletedAt], map: "idx_deleted_at")
+  @@index([shopId, createdAt], map: "idx_shop_created")
+  @@index([salespersonId, createdAt], map: "idx_salesperson_created")
+  @@index([memberId, createdAt], map: "idx_member_created")
+  @@map("sale_order")
+}
+
+/// 销售明细 (INSERT ONLY, 分区表)
+/// ⚠️ 分区表: 需在 migration 中手动添加 PARTITION BY RANGE (TO_DAYS(created_at))
+model SaleItem {
+  id                 BigInt   @default(autoincrement()) @db.UnsignedBigInt
+  orderId            BigInt   @map("order_id") @db.UnsignedBigInt
+  imei               String   @db.VarChar(20)
+  skuId              BigInt   @map("sku_id") @db.UnsignedBigInt
+  salePrice          Decimal  @map("sale_price") @db.Decimal(10, 2)
+  costPriceSnapshot  Decimal  @map("cost_price_snapshot") @db.Decimal(10, 2)
+  subsidyIncome      Decimal  @default(0.00) @map("subsidy_income") @db.Decimal(10, 2)
+  commission         Decimal  @default(0.00) @db.Decimal(10, 2)
+  grossProfit        Decimal  @map("gross_profit") @db.Decimal(10, 2)
+  createdAt          DateTime @default(now()) @map("created_at") @db.DateTime(0)
+
+  // FK
+  order SaleOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  imeiRef ImeiStock @relation(fields: [imei], references: [imei], onDelete: Restrict, onUpdate: Cascade)
+  sku   ProductSku @relation(fields: [skuId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@id([id, createdAt])
+  @@index([orderId], map: "idx_order_id")
+  @@index([imei], map: "idx_imei")
+  @@index([skuId], map: "idx_sku_id")
+  @@index([orderId, imei], map: "idx_order_imei")
+  @@map("sale_item")
+}
+
+/// 收款/退款流水 (分区表)
+/// ⚠️ 分区表: 需在 migration 中手动添加 PARTITION BY RANGE (TO_DAYS(created_at))
+model PaymentFlow {
+  id                    BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
+  shopId                BigInt         @map("shop_id") @db.UnsignedBigInt
+  paymentNo             String         @unique @map("payment_no") @db.VarChar(30)
+  orderNo               String         @map("order_no") @db.VarChar(30)
+  method                PaymentMethod
+  amount                Decimal        @db.Decimal(10, 2)
+  refundAmount          Decimal        @default(0.00) @map("refund_amount") @db.Decimal(10, 2)
+  paymentType           PaymentType    @default(normal) @map("payment_type")
+  externalTransactionId String?        @map("external_transaction_id") @db.VarChar(64)
+  reconcileStatus       ReconcileStatus @default(pending) @map("reconcile_status")
+  reconciledAt          DateTime?      @map("reconciled_at") @db.DateTime(0)
+  status                Boolean        @default(true) @db.TinyInt
+  createdAt             DateTime       @default(now()) @map("created_at") @db.DateTime(0)
+
+  // FK
+  shop  Shop      @relation(fields: [shopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  order SaleOrder @relation(fields: [orderNo], references: [orderNo], onDelete: Restrict, onUpdate: Cascade)
+
+  @@unique([paymentNo, createdAt], map: "uk_payment_no_created")
+  @@index([shopId], map: "idx_shop_id")
+  @@index([orderNo], map: "idx_order_no")
+  @@index([externalTransactionId], map: "idx_external_transaction_id")
+  @@index([reconcileStatus], map: "idx_reconcile_status")
+  @@index([paymentType], map: "idx_payment_type")
+  @@index([method, paymentType], map: "idx_method_type")
+  @@index([shopId, createdAt], map: "idx_shop_created")
+  @@map("payment_flow")
+}
+
+/// 退货单 (软删除, 审核流程)
+model ReturnOrder {
+  id                BigInt           @id @default(autoincrement()) @db.UnsignedBigInt
+  shopId            BigInt           @map("shop_id") @db.UnsignedBigInt
+  returnNo          String           @unique @map("return_no") @db.VarChar(30)
+  originalOrderNo   String           @map("original_order_no") @db.VarChar(30)
+  imei              String           @db.VarChar(20)
+  returnReason      String           @map("return_reason") @db.VarChar(500)
+  returnType        ReturnType       @map("return_type")
+  refundAmount      Decimal          @map("refund_amount") @db.Decimal(10, 2)
+  pointsRecalled    Int              @default(0) @map("points_recalled")
+  commissionRecalled Decimal         @default(0.00) @map("commission_recalled") @db.Decimal(10, 2)
+  subsidyRecalled   Decimal          @default(0.00) @map("subsidy_recalled") @db.Decimal(10, 2)
+  auditStatus       ReturnAuditStatus @default(pending) @map("audit_status")
+  auditedBy         BigInt?          @map("audited_by") @db.UnsignedBigInt
+  auditedAt         DateTime?        @map("audited_at") @db.DateTime(0)
+  completedAt       DateTime?        @map("completed_at") @db.DateTime(0)
+  createdAt         DateTime         @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.DateTime(0)
+  deletedAt         DateTime?        @map("deleted_at") @db.DateTime(0)
+
+  // FK
+  shop          Shop      @relation(fields: [shopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  originalOrder SaleOrder @relation("ReturnOriginalOrder", fields: [originalOrderNo], references: [orderNo], onDelete: Restrict, onUpdate: Cascade)
+  imeiRef       ImeiStock @relation(fields: [imei], references: [imei], onDelete: Restrict, onUpdate: Cascade)
+  auditor       SysUser?  @relation("ReturnOrderAuditor", fields: [auditedBy], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([shopId], map: "idx_shop_id")
+  @@index([originalOrderNo], map: "idx_original_order_no")
+  @@index([imei], map: "idx_imei")
+  @@index([auditStatus], map: "idx_audit_status")
+  @@index([createdAt], map: "idx_created_at")
+  @@index([deletedAt], map: "idx_deleted_at")
+  @@index([originalOrderNo, imei], map: "idx_order_imei")
+  @@map("return_order")
+}
+
+/// 以旧换新订单
+model TradeInOrder {
+  id               BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  shopId           BigInt    @map("shop_id") @db.UnsignedBigInt
+  orderNo          String    @map("order_no") @db.VarChar(30)
+  oldImei          String?   @map("old_imei") @db.VarChar(20)
+  oldBrand         String?   @map("old_brand") @db.VarChar(50)
+  oldModel         String?   @map("old_model") @db.VarChar(100)
+  oldCondition     String?   @map("old_condition") @db.VarChar(50)
+  appraisedValue   Decimal   @map("appraised_value") @db.Decimal(10, 2)
+  actualDeduction  Decimal   @map("actual_deduction") @db.Decimal(10, 2)
+  remark           String?   @db.VarChar(200)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.DateTime(0)
+
+  // FK
+  shop  Shop      @relation(fields: [shopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  order SaleOrder @relation(fields: [orderNo], references: [orderNo], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([shopId], map: "idx_shop_id")
+  @@index([orderNo], map: "idx_order_no")
+  @@index([oldImei], map: "idx_old_imei")
+  @@index([createdAt], map: "idx_created_at")
+  @@map("trade_in_order")
+}
+
+// ============================================================================
+// 第五节：提成与国补 (3 models)
+// ============================================================================
+
+/// 提成规则配置
+model CommissionRule {
+  id              BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
+  brand           String?        @db.VarChar(50)
+  model           String?        @db.VarChar(100)
+  minPrice        Decimal?       @map("min_price") @db.Decimal(10, 2)
+  maxPrice        Decimal?       @map("max_price") @db.Decimal(10, 2)
+  commissionType  CommissionType @default(fixed) @map("commission_type")
+  commissionValue Decimal        @map("commission_value") @db.Decimal(10, 2)
+  priority        Int            @default(0)
+  status          Boolean        @default(true) @db.TinyInt
+  createdAt       DateTime       @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.DateTime(0)
+
+  @@index([brand, model], map: "idx_brand_model")
+  @@index([status, priority], map: "idx_status_priority")
+  @@index([minPrice, maxPrice], map: "idx_price_range")
+  @@map("commission_rule")
+}
+
+/// 提成流水/结算
+model CommissionLedger {
+  id                   BigInt                @id @default(autoincrement()) @db.UnsignedBigInt
+  shopId               BigInt                @map("shop_id") @db.UnsignedBigInt
+  salespersonId        BigInt                @map("salesperson_id") @db.UnsignedBigInt
+  settlementPeriod     String                @map("settlement_period") @db.VarChar(7)
+  orderNo              String                @map("order_no") @db.VarChar(30)
+  estimatedCommission  Decimal               @map("estimated_commission") @db.Decimal(10, 2)
+  adjustment           Decimal               @default(0.00) @db.Decimal(10, 2)
+  actualCommission     Decimal               @map("actual_commission") @db.Decimal(10, 2)
+  status               CommissionSettleStatus @default(pending)
+  confirmedBy          BigInt?               @map("confirmed_by") @db.UnsignedBigInt
+  confirmedAt          DateTime?             @map("confirmed_at") @db.DateTime(0)
+  createdAt            DateTime              @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt            DateTime              @updatedAt @map("updated_at") @db.DateTime(0)
+
+  // FK
+  shop        Shop      @relation(fields: [shopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  salesperson SysUser   @relation("CommissionLedgerSalesperson", fields: [salespersonId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  order       SaleOrder @relation(fields: [orderNo], references: [orderNo], onDelete: Restrict, onUpdate: Cascade)
+  confirmer   SysUser?  @relation("CommissionLedgerConfirmer", fields: [confirmedBy], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@unique([salespersonId, settlementPeriod, orderNo], map: "uk_salesperson_period_order")
+  @@index([shopId], map: "idx_shop_id")
+  @@index([orderNo], map: "idx_order_no")
+  @@index([settlementPeriod], map: "idx_settlement_period")
+  @@index([status], map: "idx_status")
+  @@map("commission_ledger")
+}
+
+/// 国补记录
+model NationalSubsidy {
+  id              BigInt        @id @default(autoincrement()) @db.UnsignedBigInt
+  shopId          BigInt        @map("shop_id") @db.UnsignedBigInt
+  subsidyNo       String        @unique @map("subsidy_no") @db.VarChar(30)
+  orderNo         String        @unique @map("order_no") @db.VarChar(30)
+  imei            String        @db.VarChar(20)
+  appliedAmount   Decimal       @map("applied_amount") @db.Decimal(10, 2)
+  approvedAmount  Decimal?      @map("approved_amount") @db.Decimal(10, 2)
+  status          SubsidyStatus @default(pending_submit)
+  submittedAt     DateTime?     @map("submitted_at") @db.DateTime(0)
+  reviewedAt      DateTime?     @map("reviewed_at") @db.DateTime(0)
+  disbursedAt     DateTime?     @map("disbursed_at") @db.DateTime(0)
+  recalledAt      DateTime?     @map("recalled_at") @db.DateTime(0)
+  externalRefNo   String?       @map("external_ref_no") @db.VarChar(64)
+  remark          String?       @db.VarChar(200)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt       DateTime      @updatedAt @map("updated_at") @db.DateTime(0)
+
+  // FK
+  shop  Shop      @relation(fields: [shopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  order SaleOrder @relation(fields: [orderNo], references: [orderNo], onDelete: Restrict, onUpdate: Cascade)
+  imeiRef ImeiStock @relation(fields: [imei], references: [imei], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([shopId], map: "idx_shop_id")
+  @@index([imei], map: "idx_imei")
+  @@index([status], map: "idx_status")
+  @@index([createdAt], map: "idx_created_at")
+  @@map("national_subsidy")
+}
+
+// ============================================================================
+// 第六节：审计与日志 (3 models)
+// ============================================================================
+
+/// 入库审核日志
+model AuditLog {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  imei        String    @db.VarChar(20)
+  action      String    @db.VarChar(30)
+  operatorId  BigInt    @map("operator_id") @db.UnsignedBigInt
+  remark      String?   @db.VarChar(200)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime(0)
+
+  // FK
+  imeiRef  ImeiStock @relation(fields: [imei], references: [imei], onDelete: Restrict, onUpdate: Cascade)
+  operator SysUser   @relation(fields: [operatorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([imei], map: "idx_imei")
+  @@index([operatorId], map: "idx_operator_id")
+  @@index([action], map: "idx_action")
+  @@index([imei, action], map: "idx_imei_action")
+  @@index([createdAt], map: "idx_created_at")
+  @@map("audit_log")
+}
+
+/// 通用操作审计日志 (分区表)
+/// ⚠️ 分区表: 需在 migration 中手动添加 PARTITION BY RANGE (TO_DAYS(created_at))
+model SystemLog {
+  id          BigInt    @default(autoincrement()) @db.UnsignedBigInt
+  shopId      BigInt    @map("shop_id") @db.UnsignedBigInt
+  operatorId  BigInt    @map("operator_id") @db.UnsignedBigInt
+  module      String    @db.VarChar(30)
+  action      String    @db.VarChar(50)
+  targetType  String    @map("target_type") @db.VarChar(30)
+  targetId    String?   @map("target_id") @db.VarChar(100)
+  detailJson  Json?     @map("detail_json")
+  ipAddress   String?   @map("ip_address") @db.VarChar(45)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime(0)
+
+  // FK
+  shop     Shop    @relation(fields: [shopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  operator SysUser @relation(fields: [operatorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@id([id, createdAt])
+  @@index([shopId], map: "idx_shop_id")
+  @@index([operatorId], map: "idx_operator_id")
+  @@index([module, action], map: "idx_module_action")
+  @@index([targetType, targetId], map: "idx_target")
+  @@map("system_log")
+}
+
+/// AI对话日志 (分区表)
+/// ⚠️ 分区表: 需在 migration 中手动添加 PARTITION BY RANGE (TO_DAYS(created_at))
+model AiChatLog {
+  id            BigInt    @default(autoincrement()) @db.UnsignedBigInt
+  userId        BigInt    @map("user_id") @db.UnsignedBigInt
+  userRole      String    @map("user_role") @db.VarChar(20)
+  query         String    @db.VarChar(1000)
+  intent        String?   @db.VarChar(50)
+  functionCalled String?  @map("function_called") @db.VarChar(50)
+  confidence    Decimal?  @db.Decimal(5, 2)
+  reply         String?   @db.Text
+  isTransferred Boolean   @default(false) @map("is_transferred") @db.TinyInt
+  ticketId      String?   @map("ticket_id") @db.VarChar(50)
+  latencyMs     Int?      @map("latency_ms")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.DateTime(0)
+
+  @@id([id, createdAt])
+  @@index([userId], map: "idx_user_id")
+  @@index([userRole], map: "idx_user_role")
+  @@index([intent], map: "idx_intent")
+  @@index([functionCalled], map: "idx_function_called")
+  @@index([isTransferred], map: "idx_is_transferred")
+  @@index([confidence], map: "idx_confidence")
+  @@index([userId, createdAt], map: "idx_user_created")
+  @@index([latencyMs], map: "idx_latency")
+  @@map("ai_chat_log")
+}
+
+// ============================================================================
+// 第七节：通知与对账 (4 models)
+// ============================================================================
+
+/// 事务发件箱 (Transactional Outbox Pattern)
+model NotificationOutbox {
+  id            BigInt       @id @default(autoincrement()) @db.UnsignedBigInt
+  aggregateType String       @map("aggregate_type") @db.VarChar(50)
+  aggregateId   String       @map("aggregate_id") @db.VarChar(100)
+  eventType     String       @map("event_type") @db.VarChar(50)
+  payloadJson   Json         @map("payload_json")
+  status        OutboxStatus @default(pending)
+  retryCount    Int          @default(0) @map("retry_count")
+  maxRetries    Int          @default(3) @map("max_retries")
+  nextRetryAt   DateTime?    @map("next_retry_at") @db.DateTime(0)
+  errorMsg      String?      @map("error_msg") @db.VarChar(500)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt     DateTime     @updatedAt @map("updated_at") @db.DateTime(0)
+
+  @@index([status, nextRetryAt], map: "idx_status_next_retry")
+  @@index([aggregateType, aggregateId], map: "idx_aggregate")
+  @@index([eventType], map: "idx_event_type")
+  @@index([createdAt], map: "idx_created_at")
+  @@map("notification_outbox")
+}
+
+/// 短信发送记录
+model SmsLog {
+  id          BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  memberId    BigInt?   @map("member_id") @db.UnsignedBigInt
+  phone       String    @db.VarChar(11)
+  content     String    @db.VarChar(500)
+  scene       String    @db.VarChar(30)
+  status      SmsStatus @default(pending)
+  retryCount  Int       @default(0) @map("retry_count")
+  sentAt      DateTime? @map("sent_at") @db.DateTime(0)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime(0)
+
+  // FK
+  member Member? @relation(fields: [memberId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([memberId], map: "idx_member_id")
+  @@index([status], map: "idx_status")
+  @@index([scene], map: "idx_scene")
+  @@index([createdAt], map: "idx_created_at")
+  @@index([status, retryCount], map: "idx_status_retry")
+  @@map("sms_log")
+}
+
+/// 日终对账记录
+model DailyReconcile {
+  id             BigInt            @id @default(autoincrement()) @db.UnsignedBigInt
+  shopId         BigInt            @map("shop_id") @db.UnsignedBigInt
+  reconcileDate  DateTime          @map("reconcile_date") @db.Date
+  checkType      ReconcileCheckType @map("check_type")
+  expectedCount  Int               @map("expected_count")
+  actualCount    Int               @map("actual_count")
+  diffCount      Int               @default(0) @map("diff_count")
+  diffDetail     Json?             @map("diff_detail")
+  status         ReconcileResult
+  resolvedBy     BigInt?           @map("resolved_by") @db.UnsignedBigInt
+  resolvedAt     DateTime?         @map("resolved_at") @db.DateTime(0)
+  createdAt      DateTime          @default(now()) @map("created_at") @db.DateTime(0)
+
+  // FK
+  shop     Shop     @relation(fields: [shopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  resolver SysUser? @relation("DailyReconcileResolver", fields: [resolvedBy], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@unique([shopId, reconcileDate, checkType], map: "uk_shop_date_type")
+  @@index([status], map: "idx_status")
+  @@index([reconcileDate], map: "idx_reconcile_date")
+  @@index([checkType], map: "idx_check_type")
+  @@map("daily_reconcile")
+}
+
+/// 积分过期执行日志
+model PointsExpireLog {
+  id            BigInt       @id @default(autoincrement()) @db.UnsignedBigInt
+  memberId      BigInt       @map("member_id") @db.UnsignedBigInt
+  totalExpired  Int          @map("total_expired")
+  affectedRows  Int          @map("affected_rows")
+  executedAt    DateTime     @map("executed_at") @db.DateTime(0)
+  status        ExpireStatus
+  errorMsg      String?      @map("error_msg") @db.VarChar(500)
+  createdAt     DateTime     @default(now()) @map("created_at") @db.DateTime(0)
+
+  // FK
+  member Member @relation(fields: [memberId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([memberId], map: "idx_member_id")
+  @@index([executedAt], map: "idx_executed_at")
+  @@index([status], map: "idx_status")
+  @@map("points_expire_log")
+}
+
+// ============================================================================
+// 第八节：预警与盘点 (4 models)
+// ============================================================================
+
+/// 预警规则配置
+model AlertRule {
+  id               BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  shopId           BigInt?    @map("shop_id") @db.UnsignedBigInt
+  skuId            BigInt?    @map("sku_id") @db.UnsignedBigInt
+  alertType        AlertType  @map("alert_type")
+  thresholdJson    Json       @map("threshold_json")
+  notifyChannels   Json?      @map("notify_channels")
+  enabled          Boolean    @default(true) @db.TinyInt
+  cooldownMinutes  Int        @default(240) @map("cooldown_minutes")
+  createdAt        DateTime   @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt        DateTime   @updatedAt @map("updated_at") @db.DateTime(0)
+
+  // FK (NULL = 全局规则)
+  shop Shop?       @relation(fields: [shopId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  sku  ProductSku? @relation(fields: [skuId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  // 关联
+  alertLogs AlertLog[]
+
+  @@index([shopId], map: "idx_shop_id")
+  @@index([skuId], map: "idx_sku_id")
+  @@index([alertType, enabled], map: "idx_alert_type_enabled")
+  @@map("alert_rule")
+}
+
+/// 预警触发日志
+model AlertLog {
+  id           BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  shopId       BigInt     @map("shop_id") @db.UnsignedBigInt
+  ruleId       BigInt?    @map("rule_id") @db.UnsignedBigInt
+  alertType    String     @map("alert_type") @db.VarChar(30)
+  level        AlertLevel
+  message      String     @db.VarChar(500)
+  skuId        BigInt?    @map("sku_id") @db.UnsignedBigInt
+  currentStock Int?       @map("current_stock")
+  isResolved   Boolean    @default(false) @map("is_resolved") @db.TinyInt
+  resolvedAt   DateTime?  @map("resolved_at") @db.DateTime(0)
+  createdAt    DateTime   @default(now()) @map("created_at") @db.DateTime(0)
+
+  // FK
+  shop Shop      @relation(fields: [shopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rule AlertRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+
+  @@index([shopId], map: "idx_shop_id")
+  @@index([ruleId], map: "idx_rule_id")
+  @@index([alertType], map: "idx_alert_type")
+  @@index([level], map: "idx_level")
+  @@index([isResolved], map: "idx_is_resolved")
+  @@index([createdAt], map: "idx_created_at")
+  @@map("alert_log")
+}
+
+/// 盘点任务
+model StockCheck {
+  id             BigInt           @id @default(autoincrement()) @db.UnsignedBigInt
+  shopId         BigInt           @map("shop_id") @db.UnsignedBigInt
+  checkNo        String           @unique @map("check_no") @db.VarChar(30)
+  type           StockCheckType
+  operatorId     BigInt           @map("operator_id") @db.UnsignedBigInt
+  status         StockCheckStatus @default(in_progress)
+  expectedCount  Int              @default(0) @map("expected_count")
+  actualCount    Int              @default(0) @map("actual_count")
+  surplusCount   Int              @default(0) @map("surplus_count")
+  deficitCount   Int              @default(0) @map("deficit_count")
+  confirmedBy    BigInt?          @map("confirmed_by") @db.UnsignedBigInt
+  confirmedAt    DateTime?        @map("confirmed_at") @db.DateTime(0)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.DateTime(0)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.DateTime(0)
+
+  // FK
+  shop      Shop     @relation(fields: [shopId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  operator  SysUser  @relation("StockCheckOperator", fields: [operatorId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  confirmer SysUser? @relation("StockCheckConfirmer", fields: [confirmedBy], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  // 关联
+  items StockCheckItem[]
+
+  @@index([shopId], map: "idx_shop_id")
+  @@index([operatorId], map: "idx_operator_id")
+  @@index([status], map: "idx_status")
+  @@index([createdAt], map: "idx_created_at")
+  @@map("stock_check")
+}
+
+/// 盘点明细
+model StockCheckItem {
+  id               BigInt          @id @default(autoincrement()) @db.UnsignedBigInt
+  checkId          BigInt          @map("check_id") @db.UnsignedBigInt
+  imei             String          @db.VarChar(20)
+  systemStatus     ImeiStatus?     @map("system_status")
+  actualStatus     CheckItemStatus @map("actual_status")
+  systemLocation   String?         @map("system_location") @db.VarChar(50)
+  actualLocation   String?         @map("actual_location") @db.VarChar(50)
+  remark           String?         @db.VarChar(200)
+  createdAt        DateTime        @default(now()) @map("created_at") @db.DateTime(0)
+
+  // FK (CASCADE 删除盘点任务时联动删除明细)
+  check StockCheck @relation(fields: [checkId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([checkId], map: "idx_check_id")
+  @@index([imei], map: "idx_imei")
+  @@index([actualStatus], map: "idx_actual_status")
+  @@map("stock_check_item")
+}

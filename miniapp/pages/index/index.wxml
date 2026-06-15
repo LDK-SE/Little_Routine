@@ -1,0 +1,23 @@
+<view class="container">
+  <view class="header">
+    <text class="title">3C数码零售</text>
+    <text class="subtitle">智能体管理系统</text>
+  </view>
+
+  <view wx:if="{{!userInfo}}" class="login-tip">
+    <text>请先登录以使用完整功能</text>
+    <button type="primary" bindtap="goLogin">立即登录</button>
+  </view>
+
+  <view wx:else class="user-info card">
+    <text class="card-title">欢迎, {{userInfo.name}}</text>
+    <view class="info-row">
+      <text class="label">手机号</text>
+      <text class="value">{{userInfo.phone}}</text>
+    </view>
+    <view class="info-row">
+      <text class="label">角色</text>
+      <text class="value">{{userInfo.role}}</text>
+    </view>
+  </view>
+</view>
