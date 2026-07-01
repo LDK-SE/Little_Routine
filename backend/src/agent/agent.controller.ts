@@ -10,6 +10,7 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
 import { AgentService } from './agent.service';
 import { FunctionHandlerService } from './function-handler.service';
+import { HealthService } from '../common/services/health.service';
 import { AiChatDto } from './dto/ai-chat.dto';
 import { AiChatLogQueryDto } from './dto/ai-chat-log-query.dto';
 import { TransferHumanDto } from './dto/transfer-human.dto';
@@ -26,6 +27,7 @@ export class AgentController {
   constructor(
     private readonly agentService: AgentService,
     private readonly functionHandler: FunctionHandlerService,
+    private readonly healthService: HealthService,
   ) {}
 
   // ==================== AI 对话 ====================
@@ -112,10 +114,18 @@ export class AgentController {
 
   @Get('health')
   @Public()
-  @ApiOperation({ summary: 'AI 健康检查', description: '检查 Dify 平台连通性（无需认证）' })
+  @ApiOperation({ summary: '健康检查', description: '检查 Dify、数据库、Redis 连通性（无需认证）' })
   @ApiResponse({ status: 200, description: '连通状态' })
-  healthCheck() {
-    return this.agentService.healthCheck();
+  async healthCheck() {
+    const [dify, infra] = await Promise.allSettled([
+      this.agentService.healthCheck(),
+      this.healthService.check(),
+    ]);
+
+    return {
+      dify: dify.status === 'fulfilled' ? dify.value : { status: 'down' },
+      ...(infra.status === 'fulfilled' ? infra.value : { status: 'down', uptime: 0, checks: {} }),
+    };
   }
 
   @Get('logs')

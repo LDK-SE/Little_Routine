@@ -20,6 +20,7 @@ fi
 
 MYSQL_USER="${MYSQL_USER:-root}"
 MYSQL_PASSWORD="${MYSQL_ROOT_PASSWORD:-}"
+export MYSQL_PWD="${MYSQL_PASSWORD}"
 MYSQL_HOST="${MYSQL_HOST:-127.0.0.1}"
 MYSQL_PORT="${MYSQL_PORT:-3306}"
 MYSQL_DATABASE="${MYSQL_DATABASE:-3c_retail}"
@@ -40,7 +41,7 @@ backup_full() {
   log "开始全量备份: $BACKUP_FILE"
 
   mysqldump \
-    -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" \
+    -u"$MYSQL_USER" \
     -h"$MYSQL_HOST" -P"$MYSQL_PORT" \
     --single-transaction \
     --quick \

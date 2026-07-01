@@ -6,6 +6,7 @@ import { DailyReconcileService } from './services/daily-reconcile.service';
 import { AlertService } from './services/alert.service';
 import { StockCheckService } from './services/stock-check.service';
 import { PointsExpireService } from './services/points-expire.service';
+import { HealthService } from './services/health.service';
 
 @Global()
 @Module({
@@ -17,6 +18,7 @@ import { PointsExpireService } from './services/points-expire.service';
     AlertService,
     StockCheckService,
     PointsExpireService,
+    HealthService,
   ],
   exports: [
     JwtAuthGuard,
@@ -26,6 +28,7 @@ import { PointsExpireService } from './services/points-expire.service';
     AlertService,
     StockCheckService,
     PointsExpireService,
+    HealthService,
   ],
 })
 export class CommonModule {}

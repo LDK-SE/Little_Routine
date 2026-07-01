@@ -10,7 +10,7 @@ WORKDIR /app
 RUN corepack enable && corepack prepare npm@latest --activate
 
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --ignore-scripts 2>/dev/null || npm install --ignore-scripts
+RUN npm ci --ignore-scripts
 
 COPY prisma ./prisma
 RUN npx prisma generate
@@ -23,7 +23,7 @@ FROM node:24-alpine
 LABEL maintainer="LDK-SE"
 LABEL description="3C数码零售系统 · 生产级 API"
 
-RUN apk add --no-cache dumb-init tzdata curl \
+RUN apk add --no-cache dumb-init tzdata curl openssl \
   && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
   && echo "Asia/Shanghai" > /etc/timezone
 
@@ -48,7 +48,9 @@ EXPOSE 3000
 
 ENTRYPOINT ["dumb-init", "--"]
 
-HEALTHCHECK --interval=15s --timeout=5s --retries=3 --start-period=20s \
+HEALTHCHECK --interval=15s --timeout=5s --retries=3 --start-period=30s \
   CMD curl -f http://localhost:3000/api/v1/ai/health || exit 1
 
-CMD ["sh", "-c", "npx prisma migrate deploy && node dist/main"]
+# 默认启动（不自动执行 migration，避免回滚风险）
+# 首次部署前手动执行: docker compose exec app npx prisma migrate deploy
+CMD ["dumb-init", "node", "dist/main"]

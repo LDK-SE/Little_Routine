@@ -2,11 +2,24 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AgentController } from './agent.controller';
 import { AgentService } from './agent.service';
 import { FunctionHandlerService } from './function-handler.service';
+import { HealthService } from '../common/services/health.service';
 
 describe('AgentController', () => {
   let controller: AgentController;
   let agentService: any;
   let functionHandler: any;
+  let healthService: any;
+
+  const mockHealthService = {
+    check: jest.fn().mockResolvedValue({
+      status: 'ok' as const,
+      uptime: 3600,
+      checks: {
+        database: { status: 'ok' as const, latencyMs: 3 },
+        redis: { status: 'ok' as const, latencyMs: 1 },
+      },
+    }),
+  };
 
   const mockAgentService = {
     chat: jest.fn().mockResolvedValue({
@@ -65,12 +78,14 @@ describe('AgentController', () => {
       providers: [
         { provide: AgentService, useValue: mockAgentService },
         { provide: FunctionHandlerService, useValue: mockFunctionHandler },
+        { provide: HealthService, useValue: mockHealthService },
       ],
     }).compile();
 
     controller = module.get<AgentController>(AgentController);
     agentService = module.get<AgentService>(AgentService);
     functionHandler = module.get<FunctionHandlerService>(FunctionHandlerService);
+    healthService = module.get<HealthService>(HealthService);
   });
 
   afterEach(() => {
@@ -169,12 +184,14 @@ describe('AgentController', () => {
   });
 
   describe('GET /ai/health', () => {
-    it('应调用 agentService.healthCheck', async () => {
-      const result = await controller.healthCheck();
+    it('应同时检查 Dify 和基础设施连通性', async () => {
+      const result = await controller.healthCheck() as any;
 
       expect(agentService.healthCheck).toHaveBeenCalled();
-      expect(result.available).toBe(true);
-      expect(result.latencyMs).toBe(45);
+      expect(healthService.check).toHaveBeenCalled();
+      expect(result.dify.available).toBe(true);
+      expect(result.dify.latencyMs).toBe(45);
+      expect(result.status).toBe('ok');
     });
   });
 
