@@ -17,8 +17,14 @@ if [ ! -f "$CERT_FILE" ] || [ ! -f "$KEY_FILE" ]; then
     -newkey rsa:2048 \
     -keyout "$KEY_FILE" \
     -out "$CERT_FILE" 2>/dev/null
-  echo "[ssl-init] 自签名证书已生成，有效期为 90 天"
-  echo "[ssl-init] 上线前请替换为正式 SSL 证书"
+
+  if [ -f "$CERT_FILE" ] && [ -f "$KEY_FILE" ]; then
+    echo "[ssl-init] 自签名证书已生成，有效期为 90 天"
+    echo "[ssl-init] 上线前请替换为正式 SSL 证书"
+  else
+    echo "[ssl-init] 错误: 证书生成失败，Nginx 将无法启动"
+    exit 1
+  fi
 else
   echo "[ssl-init] SSL 证书已存在，跳过"
 fi
