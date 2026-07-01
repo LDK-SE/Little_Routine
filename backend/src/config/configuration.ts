@@ -11,7 +11,7 @@ export default () => ({
   redis: {
     host: process.env.REDIS_HOST || 'localhost',
     port: parseInt(process.env.REDIS_PORT || '6379', 10),
-    password: process.env.REDIS_PASSWORD || (process.env.NODE_ENV === 'production' ? (() => { throw new Error('REDIS_PASSWORD is required in production'); })() : ''),
+    password: process.env.REDIS_PASSWORD || (process.env.APP_ENV === 'production' ? (() => { throw new Error('REDIS_PASSWORD is required in production'); })() : ''),
     db: parseInt(process.env.REDIS_DB || '0', 10),
   },
   jwt: {
@@ -20,7 +20,7 @@ export default () => ({
     refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   },
   log: {
-    level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
+    level: process.env.LOG_LEVEL || (process.env.APP_ENV === 'production' ? 'info' : 'debug'),
   },
   swagger: {
     enabled: (process.env.SWAGGER_ENABLED || '').toLowerCase() === 'true',

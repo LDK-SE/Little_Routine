@@ -185,7 +185,8 @@ describe('AgentController', () => {
 
   describe('GET /ai/health', () => {
     it('应同时检查 Dify 和基础设施连通性', async () => {
-      const result = await controller.healthCheck() as any;
+      const mockRes = { status: jest.fn() } as any;
+      const result = await controller.healthCheck(mockRes) as any;
 
       expect(agentService.healthCheck).toHaveBeenCalled();
       expect(healthService.check).toHaveBeenCalled();

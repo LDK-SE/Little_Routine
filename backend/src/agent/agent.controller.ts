@@ -5,6 +5,7 @@ import {
   Body,
   Query,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse } from '@nestjs/swagger';
@@ -19,7 +20,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Public } from '../common/decorators/public.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Role } from '../common/enums/role.enum';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 
 @ApiTags('AI 智能体')
 @Controller('ai')
@@ -115,16 +116,26 @@ export class AgentController {
   @Get('health')
   @Public()
   @ApiOperation({ summary: '健康检查', description: '检查 Dify、数据库、Redis 连通性（无需认证）' })
-  @ApiResponse({ status: 200, description: '连通状态' })
-  async healthCheck() {
+  @ApiResponse({ status: 200, description: '全部正常' })
+  @ApiResponse({ status: 503, description: '基础设施降级' })
+  async healthCheck(@Res({ passthrough: true }) res: Response) {
     const [dify, infra] = await Promise.allSettled([
       this.agentService.healthCheck(),
       this.healthService.check(),
     ]);
 
+    const infraResult = infra.status === 'fulfilled'
+      ? infra.value
+      : { status: 'down' as const, uptime: 0, checks: {} };
+
+    // 基础设施不可用时返回 503，Docker HEALTHCHECK 据此判断容器状态
+    if (infraResult.status !== 'ok') {
+      res.status(503);
+    }
+
     return {
       dify: dify.status === 'fulfilled' ? dify.value : { status: 'down' },
-      ...(infra.status === 'fulfilled' ? infra.value : { status: 'down', uptime: 0, checks: {} }),
+      ...infraResult,
     };
   }
 

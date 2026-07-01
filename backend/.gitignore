@@ -4,7 +4,13 @@ dist/
 .env.local
 .env.*.local
 *.log
-logs/
+/logs/
 .DS_Store
 coverage/
 *.tsbuildinfo
+
+# nginx 运行时文件（证书/日志不入库）
+nginx/ssl/*.pem
+nginx/logs/*
+!nginx/ssl/.gitkeep
+!nginx/logs/.gitkeep
