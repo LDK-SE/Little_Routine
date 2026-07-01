@@ -55,8 +55,15 @@ export class HttpExceptionFilter implements ExceptionFilter {
     } else if (exception instanceof Prisma.PrismaClientValidationError) {
       status = HttpStatus.BAD_REQUEST;
       message = '请求参数格式不合法';
-    } else if (exception instanceof Error) {
-      message = exception.message;
+    } else if (exception instanceof Prisma.PrismaClientUnknownRequestError) {
+      status = HttpStatus.INTERNAL_SERVER_ERROR;
+      message = '数据库操作异常';
+    } else if (exception instanceof Prisma.PrismaClientRustPanicError) {
+      status = HttpStatus.INTERNAL_SERVER_ERROR;
+      message = '服务器内部错误';
+    } else if (exception instanceof Prisma.PrismaClientInitializationError) {
+      status = HttpStatus.SERVICE_UNAVAILABLE;
+      message = '服务暂时不可用';
     }
 
     if (status >= 500) {

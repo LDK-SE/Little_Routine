@@ -7,10 +7,11 @@
 FROM node:24-alpine AS builder
 WORKDIR /app
 
-RUN corepack enable && corepack prepare npm@latest --activate
+RUN corepack enable && corepack prepare npm@latest --activate \
+  && apk add --no-cache python3 make g++
 
 COPY package.json package-lock.json ./
-RUN npm ci --ignore-scripts
+RUN npm ci
 
 COPY prisma ./prisma
 RUN npx prisma generate
@@ -23,7 +24,7 @@ FROM node:24-alpine
 LABEL maintainer="LDK-SE"
 LABEL description="3C数码零售系统 · 生产级 API"
 
-RUN apk add --no-cache dumb-init tzdata curl openssl \
+RUN apk add --no-cache dumb-init tzdata curl \
   && cp /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
   && echo "Asia/Shanghai" > /etc/timezone
 
@@ -53,4 +54,4 @@ HEALTHCHECK --interval=15s --timeout=5s --retries=3 --start-period=30s \
 
 # 默认启动（不自动执行 migration，避免回滚风险）
 # 首次部署前手动执行: docker compose exec app npx prisma migrate deploy
-CMD ["dumb-init", "node", "dist/main"]
+CMD ["node", "dist/main"]

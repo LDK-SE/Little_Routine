@@ -17,16 +17,17 @@ services:
       - APP_NAME=3c-retail-api
       - APP_PORT=3000
       - APP_ENV=production
-      - DATABASE_URL=mysql://${MYSQL_USER:-3capp}:${MYSQL_PASSWORD:?required}@mysql:3306/${MYSQL_DATABASE:-3c_retail}?charset=utf8mb4
+      - DATABASE_URL=mysql://${MYSQL_USER:-3capp}:${MYSQL_PASSWORD:?required}@mysql:3306/${MYSQL_DATABASE:-3c_retail}?charset=utf8mb4&connection_limit=20
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:?required}
       - REDIS_DB=0
       - JWT_SECRET=${JWT_SECRET:?required}
-      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-7d}
-      - JWT_REFRESH_EXPIRES_IN=${JWT_REFRESH_EXPIRES_IN:-30d}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-8h}
+      - JWT_REFRESH_EXPIRES_IN=${JWT_REFRESH_EXPIRES_IN:-7d}
       - LOG_LEVEL=${LOG_LEVEL:-info}
-      - SWAGGER_ENABLED=true
+      - SWAGGER_ENABLED=${SWAGGER_ENABLED:-false}
+      - SWAGGER_AUTH=${SWAGGER_AUTH:-false}
       - DIFY_BASE_URL=${DIFY_BASE_URL:-}
       - DIFY_API_KEY=${DIFY_API_KEY:-}
     depends_on:
@@ -60,13 +61,19 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    environment:
+      - SWAGGER_AUTH=${SWAGGER_AUTH:-false}
+      - SWAGGER_USER=${SWAGGER_USER:-admin}
+      - SWAGGER_PASS=${SWAGGER_PASS:-}
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ssl:/etc/nginx/ssl:ro
       - ./nginx/logs:/var/log/nginx
       - ./nginx/ssl-init.sh:/docker-entrypoint.d/40-ssl-init.sh:ro
+      - ./nginx/htpasswd-init.sh:/docker-entrypoint.d/41-htpasswd-init.sh:ro
     depends_on:
-      - app
+      app:
+        condition: service_healthy
     networks:
       - app-network
     logging:
@@ -85,6 +92,7 @@ services:
       - MYSQL_DATABASE=${MYSQL_DATABASE:-3c_retail}
       - MYSQL_USER=${MYSQL_USER:-3capp}
       - MYSQL_PASSWORD=${MYSQL_PASSWORD:?required}
+      - MYSQL_PWD=${MYSQL_ROOT_PASSWORD:?required}
     expose:
       - "3306"
     volumes:
@@ -102,7 +110,7 @@ services:
       --slow-query-log-file=/var/lib/mysql/slow-query.log
       --long-query-time=1
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${MYSQL_ROOT_PASSWORD}"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -122,6 +130,8 @@ services:
     restart: unless-stopped
     expose:
       - "6379"
+    environment:
+      - REDISCLI_AUTH=${REDIS_PASSWORD:?required}
     volumes:
       - redis-data:/data
       - ./redis/redis.conf:/usr/local/etc/redis/redis.conf:ro
@@ -129,7 +139,7 @@ services:
       redis-server /usr/local/etc/redis/redis.conf
       --requirepass ${REDIS_PASSWORD:?required}
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:?required}", "ping"]
+      test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5

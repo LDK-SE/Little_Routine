@@ -34,7 +34,7 @@
 
 generator client {
   provider        = "prisma-client-js"
-  previewFeatures = ["fullTextSearch", "relationJoins"]
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {
@@ -906,6 +906,7 @@ model AuditLog {
   @@index([action], map: "idx_action")
   @@index([imei, action], map: "idx_imei_action")
   @@index([createdAt], map: "idx_created_at")
+  @@index([operatorId, createdAt], map: "idx_operator_created")
   @@map("audit_log")
 }
 

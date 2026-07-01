@@ -5,7 +5,7 @@ import type { Request, Response, NextFunction } from 'express';
 export class SwaggerAuthMiddleware implements NestMiddleware {
   use(req: Request, _res: Response, next: NextFunction) {
     // 仅在非 development 环境启用 Basic Auth
-    if (process.env.APP_ENV === 'development' && process.env.SWAGGER_AUTH !== 'true') {
+    if (process.env.APP_ENV === 'development' && (process.env.SWAGGER_AUTH || '').toLowerCase() !== 'true') {
       return next();
     }
 

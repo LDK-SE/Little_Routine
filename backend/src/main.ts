@@ -77,6 +77,16 @@ async function bootstrap() {
   await app.listen(port);
   logger.log(`服务已启动: http://localhost:${port}`);
   logger.log(`环境: ${configService.get<string>('app.env')}`);
+
+  // ---- 进程级异常捕获 —— 防止未处理的 Promise 拒绝导致进程崩溃 ----
+  process.on('unhandledRejection', (reason) => {
+    logger.error('未处理的 Promise 拒绝 (unhandledRejection)', reason);
+  });
+
+  process.on('uncaughtException', (error) => {
+    logger.error('未捕获的异常 (uncaughtException)', error);
+    process.exit(1);
+  });
 }
 
 bootstrap();

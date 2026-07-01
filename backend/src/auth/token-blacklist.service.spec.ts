@@ -1,5 +1,4 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConfigService } from '@nestjs/config';
 import { TokenBlacklistService } from './token-blacklist.service';
 import { RedisService } from '../redis/redis.service';
 
@@ -19,7 +18,6 @@ describe('TokenBlacklistService', () => {
       providers: [
         TokenBlacklistService,
         { provide: RedisService, useValue: mockRedis },
-        { provide: ConfigService, useValue: { get: jest.fn() } },
       ],
     }).compile();
 

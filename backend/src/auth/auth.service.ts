@@ -133,6 +133,9 @@ export class AuthService {
   }
 
   async refreshToken(token: string, user: JwtPayload, ip?: string) {
+    // 撤销旧刷新令牌，防止令牌泄露后被滥用
+    await this.blacklist.blacklist(token);
+
     const payload = {
       sub: user.sub,
       phone: user.phone,
@@ -144,6 +147,9 @@ export class AuthService {
 
     return {
       accessToken: this.jwtService.sign(payload),
+      refreshToken: this.jwtService.sign(payload, {
+        expiresIn: this.configService.get<string>('jwt.refreshExpiresIn') as any,
+      }),
     };
   }
 

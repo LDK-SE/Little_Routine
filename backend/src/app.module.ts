@@ -19,7 +19,6 @@ import { TradeInModule } from './trade-in/trade-in.module';
 import { ReturnModule } from './return/return.module';
 import { AgentModule } from './agent/agent.module';
 import { CommonModule } from './common/common.module';
-import { LoggingMiddleware } from './common/middleware/logging.middleware';
 import { SwaggerAuthMiddleware } from './common/middleware/swagger-auth.middleware';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import configuration from './config/configuration';
@@ -30,7 +29,7 @@ import configuration from './config/configuration';
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
-      envFilePath: ['.env', '.env.local'],
+      envFilePath: ['.env'],
     }),
 
     // ---- 速率限制 ----
@@ -42,7 +41,7 @@ import configuration from './config/configuration';
     // ---- Pino 日志 ----
     LoggerModule.forRoot({
       pinoHttp: {
-        level: process.env.LOG_LEVEL || 'debug',
+        level: process.env.LOG_LEVEL || (process.env.APP_ENV === 'production' ? 'info' : 'debug'),
         transport:
           process.env.APP_ENV === 'development'
             ? {
@@ -102,7 +101,6 @@ import configuration from './config/configuration';
 })
 export class AppModule implements NestModule {
   configure(consumer: MiddlewareConsumer) {
-    consumer.apply(LoggingMiddleware).forRoutes('*');
     consumer.apply(SwaggerAuthMiddleware).forRoutes('api/docs');
   }
 }

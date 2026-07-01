@@ -16,14 +16,14 @@ export default () => ({
   },
   jwt: {
     secret: process.env.JWT_SECRET || (() => { throw new Error('JWT_SECRET is required'); })(),
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
-    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '30d',
+    expiresIn: process.env.JWT_EXPIRES_IN || '8h',
+    refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d',
   },
   log: {
     level: process.env.LOG_LEVEL || (process.env.NODE_ENV === 'production' ? 'info' : 'debug'),
   },
   swagger: {
-    enabled: process.env.SWAGGER_ENABLED === 'true',
+    enabled: (process.env.SWAGGER_ENABLED || '').toLowerCase() === 'true',
   },
   dify: {
     baseUrl: process.env.DIFY_BASE_URL || '',

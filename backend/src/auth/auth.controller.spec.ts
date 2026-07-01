@@ -10,7 +10,7 @@ describe('AuthController', () => {
     login: jest.fn().mockResolvedValue({ accessToken: 'token', user: { id: 1, phone: '13800138000' } }),
     register: jest.fn().mockResolvedValue({ accessToken: 'token', user: { id: 2, phone: '13900139000' } }),
     logout: jest.fn().mockResolvedValue(null),
-    refreshToken: jest.fn().mockResolvedValue({ accessToken: 'new-token' }),
+    refreshToken: jest.fn().mockResolvedValue({ accessToken: 'new-token', refreshToken: 'new-refresh-token' }),
     getProfile: jest.fn().mockResolvedValue({ id: 1, phone: '13800138000', name: '张三' }),
   };
 

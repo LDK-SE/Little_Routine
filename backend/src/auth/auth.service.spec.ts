@@ -177,7 +177,7 @@ describe('AuthService', () => {
   });
 
   describe('refreshToken', () => {
-    it('应返回新的 accessToken 并记录审计日志', async () => {
+    it('应撤销旧 token 并返回新的 accessToken 和 refreshToken', async () => {
       const result = await service.refreshToken('Bearer old-token', {
         sub: 1,
         phone: '13800138000',
@@ -186,6 +186,7 @@ describe('AuthService', () => {
       });
 
       expect(result.accessToken).toBe('mock-token');
+      expect(result.refreshToken).toBeDefined();
       expect(auditLog.logTokenRefresh).toHaveBeenCalled();
     });
   });
