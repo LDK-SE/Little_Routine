@@ -3,6 +3,7 @@ import { ValidationPipe, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { Logger as PinoLogger } from 'nestjs-pino';
+import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
@@ -37,8 +38,19 @@ async function bootstrap() {
   // ---- 统一响应格式 ----
   app.useGlobalInterceptors(new ResponseInterceptor());
 
+  // ---- Helmet 安全头 ----
+  app.use(helmet());
+
   // ---- CORS ----
-  app.enableCors();
+  const corsOrigin = configService.get<string>('app.corsOrigin');
+  if (!corsOrigin && configService.get<string>('app.env') === 'production') {
+    logger.error('CORS_ORIGIN 未配置，生产环境不允许跨域请求');
+    throw new Error('CORS_ORIGIN is required in production');
+  }
+  app.enableCors({
+    origin: corsOrigin || 'http://localhost:3000',
+    credentials: true,
+  });
 
   // ---- Swagger 文档 ----
   if (configService.get<boolean>('swagger.enabled')) {
@@ -57,6 +69,9 @@ async function bootstrap() {
     });
     logger.log('Swagger 文档已启用: /api/docs');
   }
+
+  // 优雅关闭：SIGTERM/SIGINT 时依次断开 Prisma/Redis 等连接
+  app.enableShutdownHooks();
 
   const port = configService.get<number>('app.port') || 3000;
   await app.listen(port);

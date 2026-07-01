@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsNotEmpty, Length, IsIn } from 'class-validator';
+import { IsString, IsNotEmpty, IsInt, Min, Length } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class RegisterDto {
   @ApiProperty({ description: '手机号', example: '13800138000' })
@@ -20,6 +21,8 @@ export class RegisterDto {
   name: string;
 
   @ApiProperty({ description: '门店ID', example: 1 })
-  @IsNotEmpty({ message: '门店不能为空' })
+  @Type(() => Number)
+  @IsInt({ message: '门店ID必须为整数' })
+  @Min(1, { message: '门店ID必须大于0' })
   shopId: number;
 }

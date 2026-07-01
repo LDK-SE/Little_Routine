@@ -22,12 +22,17 @@ export class RolesGuard implements CanActivate {
       throw new ForbiddenException('未登录');
     }
 
+    const userRoles: string[] = user.roles ?? [];
+    if (userRoles.length === 0) {
+      throw new ForbiddenException('权限不足');
+    }
+
     // SUPER_ADMIN 拥有所有权限
-    if (user.role === Role.SUPER_ADMIN) {
+    if (userRoles.includes(Role.SUPER_ADMIN)) {
       return true;
     }
 
-    const hasRole = requiredRoles.some((role) => user.role === role);
+    const hasRole = requiredRoles.some((role) => userRoles.includes(role));
     if (!hasRole) {
       throw new ForbiddenException('权限不足');
     }
