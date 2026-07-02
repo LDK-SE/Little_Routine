@@ -16,7 +16,7 @@ App({
     token: '',
     userInfo: null,
     systemInfo: null,
-    baseUrl: 'http://localhost:3000/api/v1',
+    baseUrl: 'https://3cdigitalretail.cn/api/v1',
   },
 
   checkLoginStatus() {
@@ -25,7 +25,7 @@ App({
       header: {
         Authorization: `Bearer ${this.globalData.token}`,
       },
-      success: (res: any) => {
+      success: (res) => {
         if (res.data?.data) {
           this.globalData.userInfo = res.data.data;
         }

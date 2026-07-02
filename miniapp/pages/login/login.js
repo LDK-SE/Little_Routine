@@ -34,7 +34,7 @@ Page({
       url: `${app.globalData.baseUrl}/auth/login`,
       method: 'POST',
       data: { phone, password },
-      success: (res: any) => {
+      success: (res) => {
         if (res.data?.code === 200 && res.data?.data?.accessToken) {
           const token = res.data.data.accessToken;
           wx.setStorageSync('token', token);
