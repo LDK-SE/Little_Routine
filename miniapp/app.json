@@ -1,27 +1,13 @@
 {
   "pages": [
     "pages/index/index",
-    "pages/login/login",
-    "pages/member/list/list"
+    "pages/login/login"
   ],
   "window": {
     "navigationBarBackgroundColor": "#1677ff",
     "navigationBarTitleText": "3C数码零售",
     "navigationBarTextStyle": "white",
     "backgroundColor": "#f5f5f5"
-  },
-  "tabBar": {
-    "color": "#999",
-    "selectedColor": "#1677ff",
-    "backgroundColor": "#fff",
-    "list": [
-      {
-        "pagePath": "pages/index/index",
-        "text": "首页",
-        "iconPath": "images/tab/home.png",
-        "selectedIconPath": "images/tab/home-active.png"
-      }
-    ]
   },
   "style": "v2",
   "sitemapLocation": "sitemap.json",
